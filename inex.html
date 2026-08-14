@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Пять билетов в цирк</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; color: #fff; user-select: none; }
+        
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box; }
+        .hud { color: #0f0; text-shadow: 0 0 5px #0f0; font-size: 18px; font-weight: bold; }
+        
+        .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center; pointer-events: auto; z-index: 20; backdrop-filter: blur(5px); }
+        .hidden { display: none !important; }
+        .card { background: #111; border: 2px solid #0f0; padding: 40px; text-align: center; max-width: 600px; box-shadow: 0 0 30px rgba(0,255,0,0.2); }
+        h1 { color: #0f0; margin-top: 0; text-transform: uppercase; letter-spacing: 3px; }
+        h2 { color: #0f0; margin-top: 0; letter-spacing: 2px; }
+        p { color: #ccc; line-height: 1.6; margin-bottom: 25px; font-size: 1.05rem; }
+        button { background: #0f0; color: #000; border: none; padding: 15px 40px; font-size: 18px; font-weight: bold; cursor: pointer; text-transform: uppercase; transition: 0.2s; margin-top: 15px; font-family: inherit; }
+        button:hover { background: #fff; box-shadow: 0 0 20px #fff; }
+
+        /* Level intro */
+        .level-num { color: #555; font-size: 14px; letter-spacing: 4px; }
+        .level-name { color: #ff0000; font-size: 2rem; text-shadow: 0 0 15px rgba(255,0,0,0.5); margin: 10px 0 20px; letter-spacing: 2px; }
+
+        /* Cooking */
+        .ing-grid { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; pointer-events: auto; }
+        .ing-btn { width: 100px; height: 100px; background: #222; border: 2px solid #444; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 40px; cursor: pointer; }
+        .ing-btn span { font-size: 12px; margin-top: 5px; }
+        .ing-btn:hover { border-color: #0f0; }
+
+        /* Computer */
+        #comp-ui { width: 500px; max-width: 90vw; height: 350px; background: #000; border: 10px solid #333; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; }
+        .scanline { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2)); background-size: 100% 4px; pointer-events: none; }
+        input { background: #000; border: none; border-bottom: 2px solid #0f0; color: #0f0; font-family: inherit; font-size: 24px; text-align: center; width: 80%; outline: none; margin-top: 20px; }
+        .rec { position: absolute; top: 20px; right: 20px; color: red; font-weight: bold; animation: blink 1s infinite; display: none; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* Sleep bar */
+        #sleep-bar-container { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); width: 300px; max-width: 80vw; background: #222; border: 2px solid #555; height: 25px; display: none; }
+        #sleep-bar { height: 100%; width: 0%; background: linear-gradient(to right, #4a0080, #ff00ff); transition: width 0.3s; }
+        #sleep-label { position: absolute; top: -22px; width: 100%; text-align: center; color: #ff00ff; font-size: 12px; letter-spacing: 2px; }
+
+        /* Toys */
+        .toy-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; pointer-events: auto; }
+        .toy-btn { width: 80px; height: 80px; background: #222; border: 2px solid #444; font-size: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .toy-btn:hover { background: #333; }
+
+        /* Danger flash */
+        #danger-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(255,0,0,0.15); pointer-events: none; display: none; z-index: 5; animation: dangerPulse 0.5s infinite; }
+        @keyframes dangerPulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+        /* Mobile controls */
+        .mobile-controls { position: absolute; bottom: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; pointer-events: auto; height: 120px; align-items: flex-end; z-index: 15; }
+        .d-pad { display: flex; gap: 15px; }
+        .ctrl-btn { width: 70px; height: 70px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; touch-action: none; }
+        .ctrl-btn:active { background: rgba(255,255,255,0.3); }
+        .action-btn { border-color: #0f0; color: #0f0; width: 90px; height: 90px; font-size: 30px; }
+        .jump-btn { border-color: #ff0; color: #ff0; width: 90px; height: 90px; font-size: 30px; }
+        @media (min-width: 1024px) { .mobile-controls { display: none; } }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div class="hud">🎪 ПЯТЬ БИЛЕТОВ В ЦИРК<br>БИЛЕТ: <span id="lvl-disp">1</span>/5</div>
+        <div id="prompt" style="position:absolute; top:65%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.8); padding:10px 20px; border:1px solid #fff; display:none; font-size:16px; text-align:center;">[E] Действие</div>
+        
+        <div class="mobile-controls">
+            <div class="d-pad">
+                <div class="ctrl-btn" id="btn-left">←</div>
+                <div class="ctrl-btn" id="btn-right">→</div>
+            </div>
+            <div style="display:flex; gap:15px;">
+                <div class="ctrl-btn jump-btn" id="btn-jump">↑</div>
+                <div class="ctrl-btn action-btn" id="btn-action">E</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="sleep-bar-container">
+        <div id="sleep-label">УРОВЕНЬ СНА</div>
+        <div id="sleep-bar"></div>
+    </div>
+
+    <div id="danger-overlay"></div>
+
+    <!-- Start -->
+    <div id="start-screen" class="screen">
+        <div class="card">
+            <h1>🎪 Пять билетов<br>в цирк</h1>
+            <p>Ты — Прото-Бот, запертый в заброшенном цирке.<br>Пройди 5 испытаний и получи свободу.<br>Каждый провал — последний.</p>
+            <button onclick="game.start()">Войти в цирк</button>
+        </div>
+    </div>
+
+    <!-- Level intro -->
+    <div id="intro-screen" class="screen hidden">
+        <div class="card">
+            <div class="level-num">БИЛЕТ <span id="intro-num">1</span> / 5</div>
+            <div class="level-name" id="intro-name">Название</div>
+            <p id="intro-desc">Описание</p>
+            <button onclick="game.beginLevel()">Начать</button>
+        </div>
+    </div>
+
+    <!-- Death -->
+    <div id="death-screen" class="screen hidden">
+        <div class="card">
+            <h1 style="color:red">СБОЙ</h1>
+            <p id="death-msg">Ошибка системы.</p>
+            <button onclick="game.restartLevel()">Перезагрузка</button>
+        </div>
+    </div>
+
+    <!-- Win -->
+    <div id="win-screen" class="screen hidden">
+        <div class="card">
+            <h1>✅ БИЛЕТ ПОЛУЧЕН</h1>
+            <p>Испытание пройдено.</p>
+            <button onclick="game.nextLevel()">Следующий билет</button>
+        </div>
+    </div>
+
+    <!-- Victory -->
+    <div id="victory-screen" class="screen hidden">
+        <div class="card">
+            <h1 style="color:#ffd700">🎟️ СВОБОДА</h1>
+            <p>Ты собрал все 5 билетов и сбежал из цирка!</p>
+            <button onclick="location.reload()">В меню</button>
+        </div>
+    </div>
+
+    <!-- Level 1: Cooking -->
+    <div id="cook-screen" class="screen hidden">
+        <div class="card">
+            <h2>ЗАКАЗ: <span id="dish-name" style="color:#ff0"></span></h2>
+            <p id="dish-desc"></p>
+            <div class="ing-grid" id="ing-container"></div>
+        </div>
+    </div>
+
+    <!-- Level 2: Computer -->
+    <div id="comp-screen" class="screen hidden" style="background:rgba(0,0,0,0.8)">
+        <div id="comp-ui">
+            <div class="scanline"></div>
+            <div class="rec" id="rec-dot">● REC</div>
+            <h2 id="comp-msg" style="color:#0f0; margin:0;">ВВЕДИ ПАРОЛЬ</h2>
+            <input type="text" id="comp-input" autocomplete="off">
+            <p id="comp-hint" style="color:#555; font-size:12px; margin-top:10px;">Подсказка: ROBOT</p>
+        </div>
+    </div>
+
+    <!-- Level 5: Toys -->
+    <div id="toy-screen" class="screen hidden">
+        <div class="card">
+            <h2>НАЙДИ НОЖ</h2>
+            <p>Попыток: <span id="toy-attempts" style="color:red">3</span></p>
+            <div class="toy-grid" id="toy-container"></div>
+        </div>
+    </div>
+
+<script>
+class Game {
+    constructor() {
+        this.scene = null; this.camera = null; this.renderer = null;
+        this.level = 1; this.state = 'MENU';
+        this.keys = { left: false, right: false, action: false, jump: false };
+        this.player = null; this.clown = null;
+        
+        // Level 4 vars
+        this.playerY = 0; this.velY = 0; this.grounded = true;
+        this.isHiding = false;
+        this.sleepLevel = 0;
+        this.attacksSurvived = 0;
+        this.clownPhase = 'WAIT'; // WAIT, WARNING, ATTACK, RETREAT
+        this.phaseTimer = 0;
+
+        this.levelData = [
+            { name: "Рецепт без права на ошибку", desc: "Клоун голоден. Выбери единственный верный ингредиент. Ошибёшься — сам станешь блюдом." },
+            { name: "Запись без свидетелей", desc: "Взломай компьютер и запиши видео-доказательство. Если клоун подойдёт — прячься!" },
+            { name: "Луч ищет тебя", desc: "Клоун вернулся в гримёрку с фонарём. Прячься под кровать и выжди, пока он уйдёт." },
+            { name: "Колыбельная для робота", desc: "Играет проклятая музыка — не дай себе уснуть! ПРЫГАЙ. Когда ОН придёт — жми E и ложись." },
+            { name: "Нож среди плюша", desc: "Среди 16 игрушек спрятана одна — с кровавым ножом. У тебя 3 попытки." }
+        ];
+
+        this.dishes = [
+            { name: "Лазанья с Гвоздями", desc: "Добавь что-то металлическое.", correct: "🔩", opts: [{i:"🔩",n:"Гвозди"},{i:"🍓",n:"Ягоды"},{i:"🧸",n:"Мишка"}] },
+            { name: "Суп Энергии", desc: "Нужен источник тока.", correct: "🔋", opts: [{i:"🔋",n:"Батарейка"},{i:"🍌",n:"Банан"},{i:"👁️",n:"Глаз"}] },
+            { name: "Хрустящий Салат", desc: "Добавь что-то стеклянное.", correct: "💡", opts: [{i:"🥬",n:"Капуста"},{i:"💡",n:"Лампочка"},{i:"🧱",n:"Кирпич"}] }
+        ];
+        this.toyAttempts = 3;
+
+        this.initThree();
+        this.initInput();
+        this.animate();
+    }
+
+    initThree() {
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x050505);
+        this.scene.fog = new THREE.FogExp2(0x050505, 0.03);
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 100);
+        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.shadowMap.enabled = true;
+        document.body.appendChild(this.renderer.domElement);
+
+        window.addEventListener('resize', () => {
+            this.camera.aspect = window.innerWidth/window.innerHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    }
+
+    initInput() {
+        const k = (e, v) => {
+            if(e.code==='ArrowLeft'||e.code==='KeyA') this.keys.left=v;
+            if(e.code==='ArrowRight'||e.code==='KeyD') this.keys.right=v;
+            if((e.code==='KeyE')&&v&&!this.keys.action) this.handleAction();
+            if(e.code==='KeyE') this.keys.action=v;
+            if((e.code==='ArrowUp'||e.code==='KeyW'||e.code==='Space')&&v) this.handleJump();
+        };
+        window.addEventListener('keydown', e=>k(e,true));
+        window.addEventListener('keyup', e=>k(e,false));
+        
+        const bindTouch = (id, onStart, onEnd) => {
+            const el = document.getElementById(id);
+            el.addEventListener('touchstart', e => { e.preventDefault(); onStart(); }, {passive:false});
+            el.addEventListener('touchend', e => { e.preventDefault(); if(onEnd) onEnd(); }, {passive:false});
+            el.addEventListener('mousedown', e => { onStart(); });
+            el.addEventListener('mouseup', e => { if(onEnd) onEnd(); });
+        };
+        
+        bindTouch('btn-left', ()=>this.keys.left=true, ()=>this.keys.left=false);
+        bindTouch('btn-right', ()=>this.keys.right=true, ()=>this.keys.right=false);
+        bindTouch('btn-action', ()=>this.handleAction(), null);
+        bindTouch('btn-jump', ()=>this.handleJump(), null);
+
+        document.getElementById('comp-input').addEventListener('keydown', e => {
+            if(e.key==='Enter' && this.state==='LEVEL_2') this.checkPassword();
+        });
+    }
+
+    start() { this.level = 1; this.showIntro(); }
+    
+    showIntro() {
+        document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+        const data = this.levelData[this.level-1];
+        document.getElementById('intro-num').innerText = this.level;
+        document.getElementById('intro-name').innerText = data.name;
+        document.getElementById('intro-desc').innerText = data.desc;
+        document.getElementById('intro-screen').classList.remove('hidden');
+    }
+
+    beginLevel() {
+        document.getElementById('intro-screen').classList.add('hidden');
+        this.loadLevel();
+    }
+
+    nextLevel() { 
+        this.level++; 
+        if(this.level>5) {
+            document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+            document.getElementById('victory-screen').classList.remove('hidden');
+        } else this.showIntro(); 
+    }
+    
+    restartLevel() { this.loadLevel(); }
+
+    loadLevel() {
+        while(this.scene.children.length > 0) this.scene.remove(this.scene.children[0]);
+        this.scene.add(new THREE.AmbientLight(0x404040, 0.5));
+        this.player = this.createRobot();
+        this.scene.add(this.player);
+        this.player.position.set(0,0,5);
+        this.camera.position.set(0,3,8);
+        this.camera.lookAt(0,1,0);
+        
+        document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+        document.getElementById('lvl-disp').innerText = this.level;
+        document.getElementById('prompt').style.display = 'none';
+        document.getElementById('sleep-bar-container').style.display = 'none';
+        document.getElementById('danger-overlay').style.display = 'none';
+
+        this.playerY = 0; this.velY = 0; this.grounded = true;
+        this.isHiding = false; this.sleepLevel = 0; this.attacksSurvived = 0;
+
+        if (this.level === 1) {
+            this.state = 'LEVEL_1';
+            const dish = this.dishes[Math.floor(Math.random()*this.dishes.length)];
+            document.getElementById('dish-name').innerText = dish.name;
+            document.getElementById('dish-desc').innerText = dish.desc;
+            const cont = document.getElementById('ing-container');
+            cont.innerHTML = '';
+            dish.opts.forEach(o => {
+                const btn = document.createElement('div');
+                btn.className = 'ing-btn';
+                btn.innerHTML = `${o.i}<span>${o.n}</span>`;
+                btn.onclick = () => o.i === dish.correct ? this.win() : this.die("Неверный ингредиент! Клоун в ярости.");
+                cont.appendChild(btn);
+            });
+            setTimeout(() => document.getElementById('cook-screen').classList.remove('hidden'), 400);
+        } 
+        else if (this.level === 2) {
+            this.state = 'LEVEL_2';
+            this.clown = this.createClown();
+            this.clown.position.set(-10,0,0);
+            this.scene.add(this.clown);
+            const desk = new THREE.Mesh(new THREE.BoxGeometry(2,1,1), new THREE.MeshStandardMaterial({color:0x333}));
+            desk.position.set(5,0.5,0);
+            this.scene.add(desk);
+            this.clownDir = 1;
+            this.videoProgress = 0;
+            setTimeout(() => {
+                document.getElementById('comp-screen').classList.remove('hidden');
+                document.getElementById('comp-msg').innerText = "ВВЕДИ ПАРОЛЬ";
+                document.getElementById('comp-hint').innerText = "Подсказка: ROBOT";
+                document.getElementById('comp-hint').style.color = "#555";
+                document.getElementById('comp-input').value = "";
+                document.getElementById('rec-dot').style.display = 'none';
+                document.getElementById('comp-input').focus();
+            }, 400);
+        }
+        else if (this.level === 3) {
+            this.state = 'LEVEL_3';
+            const light = new THREE.SpotLight(0xffffff, 1, 20, Math.PI/4, 0.5, 1);
+            light.position.set(0,5,5); light.castShadow=true; 
+            this.scene.add(light); this.scene.add(light.target);
+            const bed = new THREE.Mesh(new THREE.BoxGeometry(3,0.5,4), new THREE.MeshStandardMaterial({color:0x442222}));
+            bed.position.set(-4,0.25,0); this.scene.add(bed);
+            this.clown = this.createClown(); this.clown.position.set(10,0,0); this.scene.add(this.clown);
+            this.hideTimer = 0;
+        }
+        else if (this.level === 4) {
+            // NEW MOBILE-FRIENDLY LEVEL 4
+            this.state = 'LEVEL_4';
+            this.scene.background = new THREE.Color(0x0a0a15);
+            
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(50,20), new THREE.MeshStandardMaterial({color:0x1a1a2e}));
+            floor.rotation.x = -Math.PI/2; floor.receiveShadow=true; this.scene.add(floor);
+
+            const bed = new THREE.Mesh(new THREE.BoxGeometry(3,1,4), new THREE.MeshStandardMaterial({color:0x552222}));
+            bed.position.set(-5, 0.5, 0); bed.castShadow=true; this.scene.add(bed);
+
+            this.clown = this.createClown();
+            this.clown.position.set(15, 0, 0);
+            this.scene.add(this.clown);
+
+            const spot = new THREE.SpotLight(0xaaaaff, 0.8);
+            spot.position.set(0,10,5); spot.castShadow=true; this.scene.add(spot);
+
+            // UI setup
+            document.getElementById('sleep-bar-container').style.display = 'block';
+            this.clownPhase = 'WAIT';
+            this.phaseTimer = 4 + Math.random()*3;
+            this.promptMsg("ПРЫГАЙ (↑), чтобы не уснуть!");
+        }
+        else if (this.level === 5) {
+            this.state = 'LEVEL_5';
+            this.toyAttempts = 3;
+            document.getElementById('toy-attempts').innerText = 3;
+            for(let i=0; i<20; i++) {
+                const toy = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.5), new THREE.MeshStandardMaterial({color:Math.random()*0xffffff}));
+                toy.position.set((Math.random()-0.5)*10, 0.25, (Math.random()-0.5)*10);
+                this.scene.add(toy);
+            }
+            setTimeout(() => {
+                document.getElementById('toy-screen').classList.remove('hidden');
+                const cont = document.getElementById('toy-container');
+                cont.innerHTML = '';
+                const toys = ["🧸","🎲","🚗","🎮","🤡","🧩","🪀","🎭","🎪","🎨","🎹","🥁","🎺","🎸","🎻","🪕"];
+                toys.sort(()=>Math.random()-0.5);
+                const selected = toys.slice(0,16);
+                const knifeIdx = Math.floor(Math.random()*16);
+                selected.forEach((t, idx) => {
+                    const btn = document.createElement('div');
+                    btn.className = 'toy-btn';
+                    btn.innerText = t;
+                    btn.onclick = () => {
+                        if (idx === knifeIdx) this.win();
+                        else {
+                            this.toyAttempts--;
+                            document.getElementById('toy-attempts').innerText = this.toyAttempts;
+                            if(this.toyAttempts <= 0) this.die("Нож не найден! Игрушки ожили...");
+                            else btn.style.opacity = 0.2;
+                        }
+                    };
+                    cont.appendChild(btn);
+                });
+            }, 400);
+        }
+    }
+
+    promptMsg(msg) {
+        const p = document.getElementById('prompt');
+        p.style.display = 'block';
+        p.innerText = msg;
+    }
+
+    handleAction() {
+        if (this.state === 'LEVEL_3') {
+            if (this.isHiding) { 
+                this.isHiding = false; this.player.visible = true; 
+                this.promptMsg("[E] Спрятаться"); 
+            } else { 
+                if (this.player.position.x < -2) { 
+                    this.isHiding = true; this.player.visible = false; 
+                    this.promptMsg("Тссс... [E] Вылезти"); 
+                } 
+            }
+        }
+        else if (this.state === 'LEVEL_4') {
+            // SIMPLIFIED: E instantly hides/unhides — works perfectly on mobile
+            if (this.isHiding) {
+                // Can only get up when clown is away
+                if (this.clownPhase === 'WAIT' || this.clownPhase === 'RETREAT') {
+                    this.isHiding = false;
+                    this.player.visible = true;
+                    this.player.scale.set(1,1,1);
+                    this.player.position.set(0, this.playerY, 5);
+                    this.promptMsg("ПРЫГАЙ (↑), чтобы не уснуть!");
+                } else {
+                    this.promptMsg("РАНО! Он ещё рядом!");
+                }
+            } else {
+                // Hide instantly anywhere
+                this.isHiding = true;
+                this.player.visible = false;
+                this.promptMsg("Лежишь в кровати... [E] Встать");
+            }
+        }
+    }
+
+    handleJump() {
+        if (this.state === 'LEVEL_4' && this.grounded && !this.isHiding) {
+            this.velY = 0.35;
+            this.grounded = false;
+            // Jumping reduces sleep
+            this.sleepLevel = Math.max(0, this.sleepLevel - 15);
+        }
+    }
+
+    checkPassword() {
+        const val = document.getElementById('comp-input').value.toUpperCase();
+        if (val === "ROBOT") {
+            document.getElementById('comp-msg').innerText = "ЗАПИСЬ...";
+            document.getElementById('rec-dot').style.display = 'block';
+            document.getElementById('comp-hint').innerText = "Если клоун рядом — жми E, чтобы спрятаться!";
+            this.videoProgress = 0;
+        } else {
+            document.getElementById('comp-msg').innerText = "ОШИБКА";
+            document.getElementById('comp-input').value = "";
+        }
+    }
+
+    win() {
+        this.state = 'WIN';
+        document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+        document.getElementById('sleep-bar-container').style.display = 'none';
+        document.getElementById('danger-overlay').style.display = 'none';
+        document.getElementById('win-screen').classList.remove('hidden');
+    }
+
+    die(msg) {
+        this.state = 'DEAD';
+        document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+        document.getElementById('sleep-bar-container').style.display = 'none';
+        document.getElementById('danger-overlay').style.display = 'none';
+        document.getElementById('death-msg').innerText = msg;
+        document.getElementById('death-screen').classList.remove('hidden');
+    }
+
+    createRobot() {
+        const g = new THREE.Group();
+        const m = new THREE.MeshStandardMaterial({color:0xcccccc, metalness:0.8});
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.4), m); b.position.y=0.4; b.castShadow=true; g.add(b);
+        const h = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.4,0.4), m); h.position.y=1.0; h.castShadow=true; g.add(h);
+        const e = new THREE.MeshBasicMaterial({color:0x00ff00});
+        const l = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.05,0.05), e); l.position.set(-0.12,1.0,0.2); g.add(l);
+        const r = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.05,0.05), e); r.position.set(0.12,1.0,0.2); g.add(r);
+        return g;
+    }
+
+    createClown() {
+        const g = new THREE.Group();
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.6,1.8), new THREE.MeshStandardMaterial({color:0x440044})); b.position.y=0.9; b.castShadow=true; g.add(b);
+        const h = new THREE.Mesh(new THREE.SphereGeometry(0.4), new THREE.MeshStandardMaterial({color:0xffffff})); h.position.y=2.0; g.add(h);
+        const n = new THREE.Mesh(new THREE.SphereGeometry(0.12), new THREE.MeshBasicMaterial({color:0xff0000})); n.position.set(0,2.0,0.35); g.add(n);
+        return g;
+    }
+
+    update(dt) {
+        if (this.state === 'LEVEL_2') {
+            this.clown.position.x += this.clownDir * 2 * dt;
+            if (Math.abs(this.clown.position.x) > 8) this.clownDir *= -1;
+            if (document.getElementById('rec-dot').style.display === 'block') {
+                this.videoProgress += dt;
+                if (this.videoProgress > 5) this.win();
+            }
+            if (Math.abs(this.clown.position.x - 5) < 3) {
+                document.getElementById('comp-hint').innerText = "ОН РЯДОМ! ЖМИ E!";
+                document.getElementById('comp-hint').style.color = "red";
+            } else {
+                document.getElementById('comp-hint').style.color = "#555";
+                document.getElementById('comp-hint').innerText = "Продолжай запись...";
+            }
+        }
+        else if (this.state === 'LEVEL_3') {
+            if (!this.isHiding) {
+                if (this.keys.left) this.player.position.x -= 3*dt;
+                if (this.keys.right) this.player.position.x += 3*dt;
+                this.player.position.x = Math.max(-8, Math.min(8, this.player.position.x));
+                if (this.player.position.x < -2) this.promptMsg("[E] Спрятаться");
+                else document.getElementById('prompt').style.display = 'none';
+            }
+            this.clown.position.x += Math.sin(Date.now()/1000) * 2 * dt;
+            if (Math.abs(this.clown.position.x - this.player.position.x) < 2 && !this.isHiding) this.die("Луч фонаря нашёл тебя!");
+            this.hideTimer += dt;
+            if (this.hideTimer > 10) this.win();
+        }
+        else if (this.state === 'LEVEL_4') {
+            // === SLEEP MECHANIC ===
+            if (!this.isHiding) {
+                this.sleepLevel += dt * 8; // Sleep grows over time
+                if (this.sleepLevel >= 100) {
+                    this.die("Ты уснул... и исчез навсегда.");
+                    return;
+                }
+                document.getElementById('sleep-bar').style.width = this.sleepLevel + '%';
+            }
+
+            // === JUMP PHYSICS ===
+            if (!this.isHiding) {
+                this.velY -= 0.02;
+                this.playerY += this.velY;
+                if (this.playerY <= 0) { this.playerY = 0; this.velY = 0; this.grounded = true; }
+                this.player.position.y = this.playerY;
+
+                if (this.keys.left) this.player.position.x -= 3*dt;
+                if (this.keys.right) this.player.position.x += 3*dt;
+                this.player.position.x = Math.max(-8, Math.min(8, this.player.position.x));
+            }
+
+            // === CLOWN PHASES (simple, mobile-friendly) ===
+            this.phaseTimer -= dt;
+            const danger = document.getElementById('danger-overlay');
+
+            if (this.clownPhase === 'WAIT') {
+                this.clown.position.x = 15;
+                danger.style.display = 'none';
+                if (!this.isHiding) this.promptMsg("ПРЫГАЙ (↑), чтобы не уснуть!");
+                if (this.phaseTimer <= 0) {
+                    this.clownPhase = 'WARNING';
+                    this.phaseTimer = 2.5; // 2.5 sec to hide
+                    this.promptMsg("⚠️ ОН ИДЁТ! ЖМИ E И ЛОЖИСЬ! ⚠️");
+                    danger.style.display = 'block';
+                }
+            }
+            else if (this.clownPhase === 'WARNING') {
+                // Clown approaches
+                this.clown.position.x -= 4 * dt;
+                if (this.phaseTimer <= 0) {
+                    if (this.isHiding) {
+                        this.clownPhase = 'ATTACK';
+                        this.phaseTimer = 3; // He looks around for 3 sec
+                        this.promptMsg("Не дыши...");
+                    } else {
+                        this.die("Он увидел тебя стоящим!");
+                        return;
+                    }
+                }
+            }
+            else if (this.clownPhase === 'ATTACK') {
+                // Clown looks around at bed area
+                this.clown.position.x = -3 + Math.sin(Date.now()/300) * 2;
+                if (this.phaseTimer <= 0) {
+                    this.clownPhase = 'RETREAT';
+                    this.phaseTimer = 2;
+                    this.attacksSurvived++;
+                    if (this.attacksSurvived >= 3) {
+                        this.win();
+                        return;
+                    }
+                    this.promptMsg("Он уходит... Встань (E) и прыгай!");
+                }
+            }
+            else if (this.clownPhase === 'RETREAT') {
+                this.clown.position.x += 4 * dt;
+                danger.style.display = 'none';
+                if (this.phaseTimer <= 0) {
+                    this.clownPhase = 'WAIT';
+                    this.phaseTimer = 4 + Math.random()*3;
+                }
+            }
+        }
+    }
+
+    animate() {
+        requestAnimationFrame(() => this.animate());
+        this.update(0.016);
+        this.renderer.render(this.scene, this.camera);
+    }
+}
+
+const game = new Game();
+</script>
+</body>
+</html>
